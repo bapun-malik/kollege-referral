@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head>
+    <title>Transactions - Admin</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-exchange-alt text-primary"></i> Transactions</h2>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" onclick="exportTransactions()">
+                    <i class="fas fa-download"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="startDate" class="form-label">Start Date</label>
+                        <input type="datetime-local" class="form-control" id="startDate" name="startDate"
+                               th:value="${startDate}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="endDate" class="form-label">End Date</label>
+                        <input type="datetime-local" class="form-control" id="endDate" name="endDate"
+                               th:value="${endDate}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="minAmount" class="form-label">Min Amount</label>
+                        <input type="number" class="form-control" id="minAmount" name="minAmount" min="0" step="0.01"
+                               placeholder="₹0.00">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="size" class="form-label">Page Size</label>
+                        <select class="form-select" id="size" name="size">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Transactions Table -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Amount</th>
+                            <th>Eligible</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="transaction : ${transactions}">
+                            <td th:text="${transaction.id}">1</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div>
+                                        <div th:text="${transaction.user.name}">John Doe</div>
+                                        <small class="text-muted" th:text="${transaction.user.email}">john@example.com</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>₹<span th:text="${#numbers.formatDecimal(transaction.amount, 1, 2)}">0.00</span></td>
+                            <td>
+                                <span th:if="${transaction.amount >= 1000}" class="badge bg-success">Yes</span>
+                                <span th:unless="${transaction.amount >= 1000}" class="badge bg-danger">No</span>
+                            </td>
+                            <td th:text="${#temporals.format(transaction.timestamp, 'dd MMM yyyy HH:mm')}">01 Jan 2024</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a th:href="@{/dashboard/{id}(id=${transaction.user.id})}" 
+                                       class="btn btn-outline-primary" title="View User">
+                                        <i class="fas fa-user"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${transactions.empty}">
+                            <td colspan="6" class="text-center py-4">
+                                <i class="fas fa-info-circle text-muted"></i> No transactions found
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="text-muted">
+                    Showing <span th:text="${transactions.numberOfElements}">0</span> of 
+                    <span th:text="${transactions.totalElements}">0</span> transactions
+                </div>
+                <nav th:if="${transactions.totalPages > 1}">
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item" th:classappend="${transactions.first ? 'disabled' : ''}">
+                            <a class="page-link" th:href="@{/transactions(page=${transactions.number - 1}, size=${transactions.size})}">&laquo;</a>
+                        </li>
+                        <li class="page-item" th:each="i : ${#numbers.sequence(0, transactions.totalPages - 1)}"
+                            th:classappend="${i == transactions.number ? 'active' : ''}">
+                            <a class="page-link" th:href="@{/transactions(page=${i}, size=${transactions.size})}" th:text="${i + 1}">1</a>
+                        </li>
+                        <li class="page-item" th:classappend="${transactions.last ? 'disabled' : ''}">
+                            <a class="page-link" th:href="@{/transactions(page=${transactions.number + 1}, size=${transactions.size})}">&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <th:block layout:fragment="scripts">
+        <script>
+            // Export transactions
+            function exportTransactions() {
+                const params = new URLSearchParams(window.location.search);
+                window.location.href = '/api/transactions/export?' + params.toString();
+            }
+
+            // Handle filter form submission
+            document.getElementById('filterForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const params = new URLSearchParams();
+                for (let [key, value] of formData.entries()) {
+                    if (value) params.append(key, value);
+                }
+                window.location.href = '/transactions?' + params.toString();
+            });
+
+            // Initialize tooltips
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+                new bootstrap.Tooltip(el);
+            });
+        </script>
+    </th:block>
+</body>
+</html> 

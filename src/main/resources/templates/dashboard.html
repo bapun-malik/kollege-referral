@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head>
+    <title>Dashboard</title>
+    <style>
+        .stats-card {
+            transition: all 0.3s ease;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .referral-card {
+            background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+            color: white;
+        }
+        .earnings-card {
+            background: linear-gradient(135deg, #1e88e5, #1565c0);
+            color: white;
+        }
+        .chart-card {
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .small-chart {
+            height: 250px;
+        }
+        .referral-link-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .referral-link {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+            margin-bottom: 15px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .referral-link:hover {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        .copy-tooltip {
+            position: absolute;
+            background: #4CAF50;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            margin-left: 10px;
+        }
+        .copy-tooltip.show {
+            opacity: 1;
+        }
+        .social-share-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 5px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .social-share-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .whatsapp { background: #25D366; }
+        .telegram { background: #0088cc; }
+        .facebook { background: #1877F2; }
+        .twitter { background: #1DA1F2; }
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            max-width: 350px;
+        }
+        .notification-toast {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin-bottom: 10px;
+            overflow: hidden;
+            animation: slideIn 0.3s ease-out;
+        }
+        .notification-toast.success {
+            border-left: 4px solid #28a745;
+        }
+        .notification-toast .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .notification-toast.fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+        #qrcode {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            display: inline-block;
+        }
+        .copy-btn {
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+        .copy-btn i {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Notification Container -->
+        <div class="notification-container" id="notificationContainer"></div>
+
+        <!-- Error Alert -->
+        <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+            <span th:text="${error}">Error message</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <!-- Success Alert -->
+        <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+            <span th:text="${message}">Success message</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+
+        <!-- Welcome and Quick Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <h2 class="mb-4">Welcome Back, <span th:text="${user != null ? user.name : 'Guest'}">User</span>!</h2>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Share your referral link to earn commissions on purchases!
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <button class="btn btn-outline-primary" onclick="downloadEarningsReport()">
+                    <i class="fas fa-download"></i> Download Report
+                </button>
+            </div>
+        </div>
+
+        <!-- Referral Link Card -->
+        <div class="card referral-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Your Referral Code</h5>
+                <div class="referral-link-container">
+                    <div class="referral-link mb-3" id="referralLink" th:text="${ (user != null ? user.referralCode : '')}">
+                        http://localhost:8080/ref/ABC123
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap">
+                        <div class="d-flex align-items-center mb-2 mb-md-0">
+                            <button class="copy-btn me-2" onclick="copyReferralLink()" id="copyBtn">
+                                <i class="fas fa-copy"></i> Copy Code
+                            </button>
+                            <div class="copy-tooltip" id="copyTooltip">Copied!</div>
+                        </div>
+                        <div class="social-share">
+                            <button class="social-share-btn whatsapp" onclick="shareOnWhatsApp()" title="Share on WhatsApp">
+                                <i class="fab fa-whatsapp"></i>
+                            </button>
+                            <button class="social-share-btn telegram" onclick="shareOnTelegram()" title="Share on Telegram">
+                                <i class="fab fa-telegram-plane"></i>
+                            </button>
+                            <button class="social-share-btn facebook" onclick="shareOnFacebook()" title="Share on Facebook">
+                                <i class="fab fa-facebook-f"></i>
+                            </button>
+                            <button class="social-share-btn twitter" onclick="shareOnTwitter()" title="Share on Twitter">
+                                <i class="fab fa-twitter"></i>
+                            </button>
+                            <button class="social-share-btn" onclick="shareViaEmail()" title="Share via Email" style="background: #EA4335;">
+                                <i class="fas fa-envelope"></i>
+                            </button>
+                            <button class="social-share-btn" onclick="showQRCode()" title="Show QR Code" style="background: #000;">
+                                <i class="fas fa-qrcode"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- QR Code Modal -->
+                <div class="modal fade" id="qrCodeModal" tabindex="-1" aria-labelledby="qrCodeModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title text-dark" id="qrCodeModalLabel">Scan QR Code</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body text-center">
+                                <div id="qrcode"></div>
+                                <button class="btn btn-primary mt-3" onclick="downloadQRCode()">
+                                    <i class="fas fa-download"></i> Download QR Code
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Direct Referrals</h6>
+                        <h2 class="card-title mb-0" th:text="${directReferrals ?: 0}">0</h2>
+                        <div class="progress mt-2" style="height: 4px;">
+                            <div class="progress-bar" role="progressbar" 
+                                 th:style="'width: ' + ${directReferrals != null ? (directReferrals/maxDirectReferrals)*100 : 0} + '%'"></div>
+                        </div>
+                        <small class="text-muted" th:text="${directReferrals + '/' + maxDirectReferrals + ' slots used'}">0/8 slots used</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2 text-muted">Total Earnings</h6>
+                        <h2 class="card-title mb-0">₹<span th:text="${#numbers.formatDecimal(totalEarnings ?: 0, 1, 2)}">0.00</span></h2>
+                        <small class="text-success">Lifetime earnings</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card earnings-card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2">Direct Earnings</h6>
+                        <h2 class="card-title">₹<span th:text="${#numbers.formatDecimal(level1Total ?: 0, 1, 2)}">0.00</span></h2>
+                        <p class="card-text"><small>5% commission on direct referrals</small></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card earnings-card">
+                    <div class="card-body">
+                        <h6 class="card-subtitle mb-2">Indirect Earnings</h6>
+                        <h2 class="card-title">₹<span th:text="${#numbers.formatDecimal(level2Total ?: 0, 1, 2)}">0.00</span></h2>
+                        <p class="card-text"><small>1% commission on indirect referrals</small></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Earnings Table -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Recent Earnings</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Source</th>
+                                <th>Level</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="earning : ${earnings}">
+                                <td th:text="${#temporals.format(earning.timestamp, 'dd MMM yyyy HH:mm')}">01 Jan 2024</td>
+                                <td th:text="${earning.sourceUser.name}">John Doe</td>
+                                <td th:text="${earning.level == 1 ? 'Direct' : 'Indirect'}">Direct</td>
+                                <td>₹<span th:text="${#numbers.formatDecimal(earning.earnedAmount, 1, 2)}">0.00</span></td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(earnings)}">
+                                <td colspan="4" class="text-center">No earnings yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Purchase Form -->
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-shopping-cart text-primary"></i> Make a Purchase
+                </h5>
+            </div>
+            <div class="card-body">
+                <form th:action="@{/dashboard/{userId}/purchase(userId=${user.id})}" method="post" class="needs-validation" novalidate>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="amount" class="form-label">Purchase Amount (₹)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" class="form-control" id="amount" name="amount" 
+                                           required min="1" step="0.01" placeholder="Enter amount">
+                                    <div class="invalid-feedback">
+                                        Please enter a valid amount.
+                                    </div>
+                                </div>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle"></i> Minimum ₹1000 for referral earnings.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Referral Benefits</label>
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <p class="mb-2"><i class="fas fa-check text-success"></i> Direct referrer earns 5%</p>
+                                        <p class="mb-0"><i class="fas fa-check text-success"></i> Indirect referrer earns 1%</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Complete Purchase
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // Referral link copying with visual feedback
+        async function copyReferralLink() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const tooltip = document.getElementById('copyTooltip');
+            const copyBtn = document.getElementById('copyBtn');
+
+            try {
+                // Try using the modern Clipboard API first
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(referralLink);
+                } else {
+                    // Fallback for older browsers or non-HTTPS
+                    const textArea = document.createElement('textarea');
+                    textArea.value = referralLink;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                    } catch (err) {
+                        console.error('Fallback copy failed:', err);
+                        textArea.remove();
+                        throw new Error('Copy failed');
+                    }
+                    textArea.remove();
+                }
+
+                // Show success feedback
+                tooltip.classList.add('show');
+                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyBtn.classList.add('btn-success');
+                
+                // Vibrate on mobile devices
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    tooltip.classList.remove('show');
+                    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                    copyBtn.classList.remove('btn-success');
+                }, 2000);
+
+            } catch (err) {
+                console.error('Copy failed:', err);
+                // Show error feedback
+                tooltip.textContent = 'Copy failed!';
+                tooltip.style.backgroundColor = '#dc3545';
+                tooltip.classList.add('show');
+                copyBtn.innerHTML = '<i class="fas fa-times"></i> Failed';
+                copyBtn.classList.add('btn-danger');
+
+                // Reset after 2 seconds
+                setTimeout(() => {
+                    tooltip.classList.remove('show');
+                    tooltip.style.backgroundColor = '#4CAF50';
+                    tooltip.textContent = 'Copied!';
+                    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                    copyBtn.classList.remove('btn-danger');
+                }, 2000);
+            }
+        }
+
+        // Make the entire referral link clickable for copying
+        document.addEventListener('DOMContentLoaded', function() {
+            const referralLinkElement = document.querySelector('.referral-link');
+            if (referralLinkElement) {
+                referralLinkElement.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    copyReferralLink();
+                });
+            }
+        });
+
+        // Social sharing functions
+        function shareOnWhatsApp() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const text = encodeURIComponent('Join Kollege using my referral link and earn rewards! 🎉\n\n' + referralLink);
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+
+        function shareOnTelegram() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const text = encodeURIComponent('Join Kollege using my referral link and earn rewards! 🎉\n\n' + referralLink);
+            window.open(`https://t.me/share/url?url=${referralLink}&text=${text}`, '_blank');
+        }
+
+        function shareOnFacebook() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`, '_blank');
+        }
+
+        function shareOnTwitter() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const text = encodeURIComponent('Join Kollege using my referral link and earn rewards! 🎉\n\n' + referralLink);
+            window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
+        }
+
+        function shareViaEmail() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const subject = encodeURIComponent('Join Kollege - Special Referral Link');
+            const body = encodeURIComponent(`Hi!\n\nI'd like to invite you to join Kollege using my referral link:\n\n${referralLink}\n\nBy using this link, you'll get access to special benefits and rewards!\n\nBest regards`);
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+
+        // QR Code functionality
+        let qrCodeInstance = null;
+
+        function showQRCode() {
+            const referralLink = /*[[${user != null ? 'http://localhost:8080/ref/' + user.referralCode : ''}]]*/ '';
+            const modal = new bootstrap.Modal(document.getElementById('qrCodeModal'));
+            const qrContainer = document.getElementById('qrcode');
+            
+            // Clear previous QR code
+            qrContainer.innerHTML = '';
+            
+            // Generate new QR code
+            qrCodeInstance = new QRCode(qrContainer, {
+                text: referralLink,
+                width: 256,
+                height: 256,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            modal.show();
+        }
+
+        function downloadQRCode() {
+            const canvas = document.querySelector('#qrcode canvas');
+            const link = document.createElement('a');
+            link.download = 'referral-qr-code.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function downloadEarningsReport() {
+            const userId = /*[[${user != null ? user.id : ''}]]*/ '';
+            if (userId) {
+                window.location.href = `/api/earnings/report/${userId}`;
+            }
+        }
+
+        // WebSocket Connection
+        const userId = /*[[${user != null ? user.id : ''}]]*/ '';
+        let stompClient = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 5;
+
+        function connectWebSocket() {
+            if (!userId) {
+                console.log('No user ID available, skipping WebSocket connection');
+                return;
+            }
+
+            console.log('Attempting to connect WebSocket for user:', userId);
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            
+            // Enable STOMP debug logging
+            stompClient.debug = function(str) {
+                console.log('STOMP:', str);
+            };
+            
+            const connectHeaders = {
+                login: 'guest',
+                passcode: 'guest',
+                'heart-beat': '10000,10000'
+            };
+            
+            stompClient.connect(connectHeaders, function(frame) {
+                console.log('Connected to WebSocket:', frame);
+                reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+                
+                // Subscribe to personal earnings channel
+                const subscription = stompClient.subscribe('/topic/earnings/' + userId, function(message) {
+                    console.log('Received message:', message);
+                    try {
+                        const notification = JSON.parse(message.body);
+                        console.log('Parsed notification:', notification);
+                        showNotification(notification);
+                        updateDashboardStats(notification);
+                    } catch (e) {
+                        console.error('Error processing message:', e);
+                        console.log('Raw message body:', message.body);
+                    }
+                });
+                
+                console.log('Subscribed to earnings topic:', subscription);
+            }, function(error) {
+                console.error('WebSocket connection error:', error);
+                
+                // Implement exponential backoff for reconnection
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                    console.log(`Reconnecting in ${backoffDelay}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+                    setTimeout(connectWebSocket, backoffDelay);
+                    reconnectAttempts++;
+                } else {
+                    console.error('Max reconnection attempts reached');
+                }
+            });
+
+            // Add connection status indicator
+            const statusDiv = document.createElement('div');
+            statusDiv.id = 'wsStatus';
+            statusDiv.style.position = 'fixed';
+            statusDiv.style.bottom = '10px';
+            statusDiv.style.right = '10px';
+            statusDiv.style.padding = '5px 10px';
+            statusDiv.style.borderRadius = '5px';
+            statusDiv.style.fontSize = '12px';
+            statusDiv.style.zIndex = '1000';
+            document.body.appendChild(statusDiv);
+
+            // Update status indicator
+            function updateStatus(connected) {
+                const statusDiv = document.getElementById('wsStatus');
+                if (statusDiv) {
+                    statusDiv.style.backgroundColor = connected ? '#4CAF50' : '#f44336';
+                    statusDiv.style.color = 'white';
+                    statusDiv.textContent = connected ? 'Connected' : 'Disconnected';
+                }
+            }
+
+            // Monitor WebSocket state
+            setInterval(() => {
+                if (stompClient && stompClient.connected) {
+                    updateStatus(true);
+                } else {
+                    updateStatus(false);
+                }
+            }, 1000);
+        }
+
+        function updateDashboardStats(notification) {
+            // Update total earnings
+            const totalEarningsElement = document.querySelector('.stats-card:nth-child(2) .card-title span');
+            if (totalEarningsElement) {
+                const currentTotal = parseFloat(totalEarningsElement.textContent.replace(/[^0-9.-]+/g, ""));
+                totalEarningsElement.textContent = (currentTotal + notification.earnedAmount).toFixed(2);
+            }
+
+            // Update direct/indirect earnings based on level
+            const targetSelector = notification.level === 1 ? 
+                '.earnings-card:nth-child(1) .card-title span' : 
+                '.earnings-card:nth-child(2) .card-title span';
+            
+            const earningsElement = document.querySelector(targetSelector);
+            if (earningsElement) {
+                const currentAmount = parseFloat(earningsElement.textContent.replace(/[^0-9.-]+/g, ""));
+                earningsElement.textContent = (currentAmount + notification.earnedAmount).toFixed(2);
+            }
+
+            // Add new earning to the recent earnings table
+            const tableBody = document.querySelector('.table tbody');
+            if (tableBody) {
+                // Remove "No earnings yet" row if it exists
+                const noEarningsRow = tableBody.querySelector('tr td[colspan="4"]');
+                if (noEarningsRow) {
+                    noEarningsRow.parentElement.remove();
+                }
+
+                // Add new earning row at the top
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td>${new Date().toLocaleString('en-GB', { 
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}</td>
+                    <td>${notification.sourceUserName}</td>
+                    <td>${notification.level === 1 ? 'Direct' : 'Indirect'}</td>
+                    <td>₹${notification.earnedAmount.toFixed(2)}</td>
+                `;
+                
+                // Insert at the beginning of the table
+                if (tableBody.firstChild) {
+                    tableBody.insertBefore(newRow, tableBody.firstChild);
+                } else {
+                    tableBody.appendChild(newRow);
+                }
+            }
+        }
+
+        function showNotification(notification) {
+            const container = document.getElementById('notificationContainer');
+            const toast = document.createElement('div');
+            toast.className = 'notification-toast success p-3';
+            
+            const amount = new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR'
+            }).format(notification.earnedAmount);
+
+            const level = notification.level === 1 ? 'Direct' : 'Indirect';
+            
+            toast.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <img src="${notification.sourceUserAvatar}" alt="" class="avatar me-3">
+                    <div>
+                        <h6 class="mb-1">New ${level} Referral Earning!</h6>
+                        <p class="mb-1">You earned ${amount} from ${notification.sourceUserName}'s purchase.</p>
+                        <small class="text-muted">Just now</small>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+
+            // Play notification sound
+            const audio = new Audio('/static/notification.mp3');
+            audio.play().catch(e => console.log('Could not play notification sound:', e));
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, 5000);
+        }
+
+        // Connect to WebSocket when page loads
+        document.addEventListener('DOMContentLoaded', connectWebSocket);
+
+        // Reconnect WebSocket when page becomes visible again
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                if (!stompClient || !stompClient.connected) {
+                    console.log('Page became visible, reconnecting WebSocket...');
+                    connectWebSocket();
+                }
+            }
+        });
+
+        // Reconnect WebSocket when internet connection is restored
+        window.addEventListener('online', function() {
+            console.log('Internet connection restored, reconnecting WebSocket...');
+            connectWebSocket();
+        });
+    </script>
+
+    <!-- Add SockJS and STOMP libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <!-- Add QR Code library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</body>
+</html> 

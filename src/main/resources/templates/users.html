@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head>
+    <title>Users - Admin</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-users text-primary"></i> Users</h2>
+                <p class="text-muted mb-0">
+                    Total Users: <span class="fw-bold" th:text="${users.totalElements}">0</span> |
+                    Total Earnings: <span class="fw-bold">₹<span th:text="${#numbers.formatDecimal(totalEarnings ?: 0, 1, 2)}">0.00</span></span>
+                    <small class="text-muted">
+                        (Direct: ₹<span th:text="${#numbers.formatDecimal(totalDirectEarnings ?: 0, 1, 2)}">0.00</span>,
+                        Indirect: ₹<span th:text="${#numbers.formatDecimal(totalIndirectEarnings ?: 0, 1, 2)}">0.00</span>)
+                    </small>
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" onclick="exportUsers()">
+                    <i class="fas fa-download"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3" method="get">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               placeholder="Search by name, email, or referral code">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="sortBy" class="form-label">Sort By</label>
+                        <select class="form-select" id="sortBy" name="sort">
+                            <option value="id,desc">ID (Newest)</option>
+                            <option value="id,asc">ID (Oldest)</option>
+                            <option value="name,asc">Name (A-Z)</option>
+                            <option value="name,desc">Name (Z-A)</option>
+                            <option value="totalEarnings,desc">Earnings (High-Low)</option>
+                            <option value="totalEarnings,asc">Earnings (Low-High)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="size" class="form-label">Page Size</label>
+                        <select class="form-select" id="size" name="size">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Referral Code</th>
+                            <th>Direct Referrals</th>
+                            <th>Total Earnings</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="user : ${users}">
+                            <td th:text="${user.id}">1</td>
+                            <td th:text="${user.name}">John Doe</td>
+                            <td th:text="${user.email}">john@example.com</td>
+                            <td>
+                                <div class="input-group">
+                                    <input type="text" class="form-control form-control-sm" readonly
+                                           th:value="${'http://localhost:8080/ref/' + user.referralCode}">
+                                    <button class="btn btn-outline-primary btn-sm copy-btn" type="button"
+                                            th:data-referral-code="${user.referralCode}">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                <span th:text="${user.directReferrals.size() + '/8'}">0/8</span>
+                                <div class="progress" style="height: 4px;">
+                                    <div class="progress-bar" role="progressbar" 
+                                         th:style="'width: ' + ${(user.directReferrals.size()/8)*100} + '%'"></div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>₹<span th:text="${#numbers.formatDecimal(user.totalEarnings ?: 0, 1, 2)}">0.00</span></span>
+                                    <small class="text-muted">
+                                        Direct: ₹<span th:text="${#numbers.formatDecimal(user.directEarnings ?: 0, 1, 2)}">0.00</span><br>
+                                        Indirect: ₹<span th:text="${#numbers.formatDecimal(user.indirectEarnings ?: 0, 1, 2)}">0.00</span>
+                                    </small>
+                                </div>
+                            </td>
+                            <td>
+                                <a th:href="@{/dashboard/{id}(id=${user.id})}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-chart-line"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr th:if="${users.empty}">
+                            <td colspan="7" class="text-center">No users found</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div th:if="${users.totalPages > 1}" class="d-flex justify-content-center mt-4">
+            <nav>
+                <ul class="pagination">
+                    <li class="page-item" th:classappend="${users.first ? 'disabled' : ''}">
+                        <a class="page-link" th:href="@{/users(page=${users.number - 1}, size=${users.size}, search=${param.search}, sort=${param.sort})}">&laquo;</a>
+                    </li>
+                    <li class="page-item" th:each="i : ${#numbers.sequence(0, users.totalPages - 1)}"
+                        th:classappend="${i == users.number ? 'active' : ''}">
+                        <a class="page-link" th:href="@{/users(page=${i}, size=${users.size}, search=${param.search}, sort=${param.sort})}" th:text="${i + 1}">1</a>
+                    </li>
+                    <li class="page-item" th:classappend="${users.last ? 'disabled' : ''}">
+                        <a class="page-link" th:href="@{/users(page=${users.number + 1}, size=${users.size}, search=${param.search}, sort=${param.sort})}">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <script>
+        function clearFilters() {
+            document.getElementById('search').value = '';
+            document.getElementById('sortBy').value = 'id,desc';
+            document.getElementById('filterForm').submit();
+        }
+
+        // Add event listeners for copy buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const referralCode = this.getAttribute('data-referral-code');
+                    const referralLink = 'http://localhost:8080/ref/' + referralCode;
+                    navigator.clipboard.writeText(referralLink).then(() => {
+                        alert('Referral link copied!');
+                    });
+                });
+            });
+
+            // Set the current values in the form
+            const urlParams = new URLSearchParams(window.location.search);
+            const search = urlParams.get('search');
+            const sort = urlParams.get('sort') || 'id,desc';
+            const size = urlParams.get('size') || '10';
+            
+            if (search) document.getElementById('search').value = search;
+            document.getElementById('sortBy').value = sort;
+            document.getElementById('size').value = size;
+        });
+
+        function exportUsers() {
+            const search = document.getElementById('search').value;
+            const sort = document.getElementById('sortBy').value;
+            let url = '/api/users/export';
+            const params = new URLSearchParams();
+            if (search) params.append('search', search);
+            if (sort) params.append('sort', sort);
+            if (params.toString()) url += '?' + params.toString();
+            window.location.href = url;
+        }
+    </script>
+</body>
+</html> 

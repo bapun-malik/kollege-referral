@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head>
+    <title>Earnings - Admin</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-money-bill-wave text-primary"></i> Earnings</h2>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" onclick="exportEarnings()">
+                    <i class="fas fa-download"></i> Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3" method="get">
+                    <div class="col-md-3">
+                        <label for="startDate" class="form-label">Start Date</label>
+                        <input type="datetime-local" class="form-control" id="startDate" name="startDate" 
+                               th:value="${startDate}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="endDate" class="form-label">End Date</label>
+                        <input type="datetime-local" class="form-control" id="endDate" name="endDate" 
+                               th:value="${endDate}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="size" class="form-label">Page Size</label>
+                        <select class="form-select" id="size" name="size">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Earnings Table -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>User</th>
+                            <th>Source</th>
+                            <th>Level</th>
+                            <th>Amount</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="earning : ${earnings}">
+                            <td th:text="${earning.id}">1</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div>
+                                        <div th:text="${earning.parentUser.name}">John Doe</div>
+                                        <small class="text-muted" th:text="${earning.parentUser.email}">john@example.com</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div>
+                                        <div th:text="${earning.sourceUser.name}">Jane Doe</div>
+                                        <small class="text-muted" th:text="${earning.sourceUser.email}">jane@example.com</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span th:if="${earning.level == 1}" class="badge bg-primary">Direct</span>
+                                <span th:if="${earning.level == 2}" class="badge bg-info">Indirect</span>
+                            </td>
+                            <td>₹<span th:text="${#numbers.formatDecimal(earning.earnedAmount, 1, 2)}">0.00</span></td>
+                            <td th:text="${#temporals.format(earning.timestamp, 'dd MMM yyyy HH:mm')}">01 Jan 2024</td>
+                        </tr>
+                        <tr th:if="${earnings.empty}">
+                            <td colspan="6" class="text-center">No earnings found</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div th:if="${earnings.totalPages > 1}" class="d-flex justify-content-center mt-4">
+            <nav>
+                <ul class="pagination">
+                    <li class="page-item" th:classappend="${earnings.first ? 'disabled' : ''}">
+                        <a class="page-link" th:href="@{/earnings(page=${earnings.number - 1}, size=${earnings.size}, startDate=${startDate}, endDate=${endDate})}">&laquo;</a>
+                    </li>
+                    <li class="page-item" th:each="i : ${#numbers.sequence(0, earnings.totalPages - 1)}"
+                        th:classappend="${i == earnings.number ? 'active' : ''}">
+                        <a class="page-link" th:href="@{/earnings(page=${i}, size=${earnings.size}, startDate=${startDate}, endDate=${endDate})}" th:text="${i + 1}">1</a>
+                    </li>
+                    <li class="page-item" th:classappend="${earnings.last ? 'disabled' : ''}">
+                        <a class="page-link" th:href="@{/earnings(page=${earnings.number + 1}, size=${earnings.size}, startDate=${startDate}, endDate=${endDate})}">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <script>
+        function clearFilters() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('filterForm').submit();
+        }
+
+        function exportEarnings() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            let url = '/api/earnings/export';
+            if (startDate && endDate) {
+                url += `?startDate=${startDate}&endDate=${endDate}`;
+            }
+            window.location.href = url;
+        }
+
+        // Set the current page size in the select
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const size = urlParams.get('size') || '10';
+            document.getElementById('size').value = size;
+        });
+    </script>
+</body>
+</html> 

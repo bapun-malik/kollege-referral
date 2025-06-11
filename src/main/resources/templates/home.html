@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head>
+    <title>Admin Dashboard - Kollege Referral System</title>
+</head>
+<body>
+    <div layout:fragment="content">
+        <!-- Welcome Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h1 class="display-6 mb-0">Welcome to Kollege</h1>
+                                <p class="lead mb-0">Multi-Level Referral & Earning System</p>
+                            </div>
+                            <div class="text-end">
+                                <h4 class="mb-0"><i class="fas fa-chart-line"></i> Admin Dashboard</h4>
+                                <small>Manage users, track earnings, and monitor referrals</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Column: User Creation and Stats -->
+            <div class="col-md-6">
+                <!-- User Creation Form -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="card-title h5 mb-0">
+                            <i class="fas fa-user-plus text-primary"></i> Create New User
+                        </h2>
+                    </div>
+                    <div class="card-body">
+                        <form th:action="@{/users/create}" th:object="${user}" method="post" class="needs-validation" novalidate>
+                            <!-- Name Field -->
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Full Name</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                                    <input type="text" class="form-control" id="name" th:field="*{name}" required
+                                           placeholder="Enter full name">
+                                </div>
+                                <div class="invalid-feedback">
+                                    Please enter a name.
+                                </div>
+                            </div>
+
+                            <!-- Email Field -->
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email Address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                                    <input type="email" class="form-control" id="email" th:field="*{email}" required
+                                           placeholder="Enter email address">
+                                </div>
+                                <div class="invalid-feedback">
+                                    Please enter a valid email address.
+                                </div>
+                            </div>
+
+                            <!-- Referral Code Field -->
+                            <div class="mb-3">
+                                <label for="referralCode" class="form-label">Referral Code (Optional)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-sitemap"></i></span>
+                                    <input type="text" class="form-control" id="referralCode" name="referralCode"
+                                           placeholder="Enter referral code">
+                                    <button class="btn btn-outline-primary" type="button" onclick="verifyReferralCode()">
+                                        <i class="fas fa-check"></i> Verify
+                                    </button>
+                                </div>
+                                <div id="referralCodeFeedback" class="form-text">
+                                    <i class="fas fa-info-circle"></i> Leave empty if you don't have a referral code.
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-save"></i> Create User
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-success text-white mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">Total Earnings</h6>
+                                        <h3 class="mb-0">₹<span th:text="${#numbers.formatDecimal(totalEarnings ?: 0, 1, 2)}">0.00</span></h3>
+                                        <small class="opacity-75">
+                                            Direct: ₹<span th:text="${#numbers.formatDecimal(totalDirectEarnings ?: 0, 1, 2)}">0.00</span><br>
+                                            Indirect: ₹<span th:text="${#numbers.formatDecimal(totalIndirectEarnings ?: 0, 1, 2)}">0.00</span>
+                                        </small>
+                                    </div>
+                                    <i class="fas fa-money-bill-wave fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                            <div class="card-footer d-flex align-items-center justify-content-between">
+                                <a class="small text-white stretched-link" href="/earnings">View Details</a>
+                                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-info text-white mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0">Total Users</h6>
+                                        <h3 class="mb-0"><span th:text="${totalUsers ?: 0}">0</span></h3>
+                                    </div>
+                                    <i class="fas fa-users fa-2x opacity-50"></i>
+                                </div>
+                            </div>
+                            <div class="card-footer d-flex align-items-center justify-content-between">
+                                <a class="small text-white stretched-link" href="/users">View Details</a>
+                                <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: User Lookup and Quick Actions -->
+            <div class="col-md-6">
+                <!-- User Lookup -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="card-title h5 mb-0">
+                            <i class="fas fa-search text-primary"></i> Quick User Lookup
+                        </h2>
+                    </div>
+                    <div class="card-body">
+                        <form id="lookupForm" onsubmit="return submitForm(event)" class="needs-validation" novalidate>
+                            <div class="mb-3">
+                                <label for="userId" class="form-label">User ID</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+                                    <input type="number" class="form-control" id="userId" name="userId" required min="1"
+                                           placeholder="Enter user ID">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-search"></i> Find
+                                    </button>
+                                </div>
+                                <div class="invalid-feedback">
+                                    Please enter a valid User ID.
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card shadow mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h2 class="card-title h5 mb-0">
+                            <i class="fas fa-bolt text-primary"></i> Quick Actions
+                        </h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <a href="/users" class="btn btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                    <i class="fas fa-users fa-2x mb-2"></i>
+                                    <span>Manage Users</span>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/transactions" class="btn btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                    <i class="fas fa-exchange-alt fa-2x mb-2"></i>
+                                    <span>Transactions</span>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="/earnings" class="btn btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                    <i class="fas fa-chart-pie fa-2x mb-2"></i>
+                                    <span>Earnings Report</span>
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="#" onclick="exportData()" class="btn btn-outline-dark w-100 h-100 d-flex flex-column align-items-center justify-content-center p-4">
+                                    <i class="fas fa-file-export fa-2x mb-2"></i>
+                                    <span>Export Data</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div th:if="${message}" class="toast position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-success text-white">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong class="me-auto">Success</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" th:text="${message}">
+                Success message
+            </div>
+        </div>
+
+        <div th:if="${error}" class="toast position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-danger text-white">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" th:text="${error}">
+                Error message
+            </div>
+        </div>
+    </div>
+
+    <th:block layout:fragment="scripts">
+        <script>
+            // Verify referral code
+            async function verifyReferralCode() {
+                const referralCode = document.getElementById('referralCode').value.trim();
+                const feedback = document.getElementById('referralCodeFeedback');
+                
+                if (!referralCode) {
+                    feedback.innerHTML = '<i class="fas fa-info-circle"></i> Please enter a referral code to verify.';
+                    feedback.className = 'form-text text-warning';
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/users/verify-referral/${referralCode}`);
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        feedback.innerHTML = `<i class="fas fa-check-circle"></i> Valid referral code from ${data.name}`;
+                        feedback.className = 'form-text text-success';
+                    } else {
+                        feedback.innerHTML = '<i class="fas fa-times-circle"></i> Invalid referral code';
+                        feedback.className = 'form-text text-danger';
+                    }
+                } catch (error) {
+                    feedback.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error verifying referral code';
+                    feedback.className = 'form-text text-danger';
+                }
+            }
+
+            // Form validation and submission for lookup
+            function submitForm(event) {
+                event.preventDefault();
+                const form = event.target;
+                const userId = document.getElementById('userId').value;
+
+                if (!form.checkValidity() || userId < 1) {
+                    form.classList.add('was-validated');
+                    return false;
+                }
+
+                window.location.href = '/dashboard/' + userId;
+                return false;
+            }
+
+            // Bootstrap form validation
+            document.querySelectorAll('.needs-validation').forEach(form => {
+                form.addEventListener('submit', event => {
+                    if (!form.checkValidity()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    form.classList.add('was-validated');
+                });
+            });
+
+            // Show toasts
+            document.addEventListener('DOMContentLoaded', () => {
+                const toastElList = document.querySelectorAll('.toast');
+                toastElList.forEach(toastEl => {
+                    const toast = new bootstrap.Toast(toastEl, {
+                        autohide: true,
+                        delay: 5000
+                    });
+                    toast.show();
+                });
+            });
+
+            // Export data function
+            function exportData() {
+                const exportMenu = document.createElement('div');
+                exportMenu.className = 'modal fade';
+                exportMenu.innerHTML = `
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Export Data</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="list-group">
+                                    <a href="/api/users/export" class="list-group-item list-group-item-action">
+                                        <i class="fas fa-users text-primary"></i> Export Users
+                                    </a>
+                                    <a href="/api/transactions/export" class="list-group-item list-group-item-action">
+                                        <i class="fas fa-exchange-alt text-success"></i> Export Transactions
+                                    </a>
+                                    <a href="/api/earnings/export" class="list-group-item list-group-item-action">
+                                        <i class="fas fa-money-bill-wave text-info"></i> Export Earnings
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(exportMenu);
+                const modal = new bootstrap.Modal(exportMenu);
+                modal.show();
+                exportMenu.addEventListener('hidden.bs.modal', () => {
+                    exportMenu.remove();
+                });
+            }
+        </script>
+    </th:block>
+</body>
+</html> 
