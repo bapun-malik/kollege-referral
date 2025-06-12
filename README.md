@@ -37,8 +37,8 @@ A robust and scalable referral system built with Spring Boot that enables multi-
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/referral-system.git
-   cd referral-system
+   git clone git@github.com:bapun-malik/kollege-referral.git
+   cd kollege-referral
    ```
 
 2. **Configure MySQL Database**
@@ -79,7 +79,6 @@ src/main/java/com/kollege/referral/
 
 The API documentation is available through Swagger UI:
 - Access Swagger UI: `http://localhost:8080/swagger-ui.html`
-- OpenAPI Specification: `http://localhost:8080/v3/api-docs`
 
 ## 🔌 WebSocket Endpoints
 
@@ -88,14 +87,6 @@ The API documentation is available through Swagger UI:
 - **Topic Subscriptions:**
   - `/topic/notifications` - For real-time notifications
   - `/topic/referrals` - For referral updates
-
-## 🛡️ Security
-
-The application implements Spring Security with:
-- JWT-based authentication
-- Role-based access control
-- Secure password handling
-- CSRF protection
 
 ## 🔍 Monitoring
 
@@ -119,7 +110,7 @@ mvn test
 
 2. **Run the JAR file:**
    ```bash
-   java -jar target/referral-system-0.0.1-SNAPSHOT.jar
+   java -jar target/kollege-referral-0.0.1-SNAPSHOT.jar
    ```
 
 ## 📝 Configuration Options
