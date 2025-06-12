@@ -6,6 +6,10 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.math.BigInteger;
 
 @Entity
 @Getter
@@ -22,15 +26,24 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false, unique = true)
+    @Column(name = "referral_code", nullable = false, unique = true)
     private String referralCode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_user_id")
     private User parentUser;
 
-    @OneToMany(mappedBy = "parentUser", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "parentUser")
     private Set<User> directReferrals = new HashSet<>();
+
+    @Column(nullable = false)
+    private double totalEarnings = 0.0;
+
+    @Column(nullable = false)
+    private double directEarnings = 0.0;
+
+    @Column(nullable = false)
+    private double indirectEarnings = 0.0;
 
     @Column(nullable = false)
     private int referralLevel = 1;
@@ -39,38 +52,19 @@ public class User {
     private boolean active = true;
 
     @Column(nullable = false)
-    @Temporal(TemporalType.TIMESTAMP)
-    private LocalDateTime lastActive;
-
-    @Column(nullable = false)
-    @Temporal(TemporalType.TIMESTAMP)
     private LocalDateTime createdAt;
 
-    @Column(name = "total_earnings", nullable = false)
-    private double totalEarnings = 0.0;
-
-    @Column(name = "direct_earnings", nullable = false)
-    private double directEarnings = 0.0;
-
-    @Column(name = "indirect_earnings", nullable = false)
-    private double indirectEarnings = 0.0;
+    @Column(nullable = false)
+    private LocalDateTime lastActive;
 
     @Version
     private Long version;
 
-    public User() {
-        this.lastActive = LocalDateTime.now();
-        this.createdAt = LocalDateTime.now();
-    }
-
     @PrePersist
     protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (lastActive == null) {
-            lastActive = LocalDateTime.now();
-        }
+        createdAt = LocalDateTime.now();
+        lastActive = LocalDateTime.now();
+        active = true;
     }
 
     @PreUpdate
@@ -78,22 +72,35 @@ public class User {
         lastActive = LocalDateTime.now();
     }
 
-    public boolean canAddMoreReferrals() {
-        return directReferrals.size() < 8;
+    public Set<User> getIndirectReferrals() {
+        return directReferrals.stream()
+                .flatMap(directRef -> directRef.getDirectReferrals().stream())
+                .collect(Collectors.toSet());
     }
 
     public String getAvatarUrl() {
-        // Generate avatar URL using Gravatar or similar service
-        return "https://www.gravatar.com/avatar/" + email.hashCode() + "?d=identicon";
+        try {
+            // Convert email to MD5 hash for Gravatar
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] messageDigest = md.digest(email.toLowerCase().trim().getBytes());
+            BigInteger no = new BigInteger(1, messageDigest);
+            String hashtext = no.toString(16);
+            while (hashtext.length() < 32) {
+                hashtext = "0" + hashtext;
+            }
+            return "https://www.gravatar.com/avatar/" + hashtext + "?d=identicon&s=200";
+        } catch (NoSuchAlgorithmException e) {
+            // Fallback to default identicon if MD5 hashing fails
+            return "https://www.gravatar.com/avatar/default?d=identicon&s=200";
+        }
     }
 
-    public void addEarning(double amount, boolean isDirect) {
-        this.totalEarnings += amount;
-        if (isDirect) {
-            this.directEarnings += amount;
-        } else {
-            this.indirectEarnings += amount;
-        }
+    public boolean canAddMoreReferrals() {
+        return directReferrals.size() < 8; // Maximum of 8 direct referrals allowed
+    }
+
+    public int getReferralLevel() {
+        return referralLevel;
     }
 
     @Override

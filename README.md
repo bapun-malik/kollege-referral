@@ -62,6 +62,10 @@ A robust and scalable referral system built with Spring Boot that enables multi-
 
    The application will be available at `http://localhost:8080`
 
+## Use The Fronted
+- go to localhost:8080 to access the home page
+- create User,look up a user etc. features
+
 ## 🏗️ Project Structure
 
 ```

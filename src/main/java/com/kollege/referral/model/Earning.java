@@ -48,9 +48,11 @@ public class Earning {
             return 0;
         }
 
+        double directEarning = transaction.getAmount() * 0.05; // 5% for direct referrals
+
         return switch (level) {
-            case 1 -> transaction.getAmount() * 0.05; // 5% for direct referrals
-            case 2 -> transaction.getAmount() * 0.01; // 1% for indirect referrals
+            case 1 -> directEarning;
+            case 2 -> directEarning * 0.01; // 1% of level 1 earnings
             default -> 0;
         };
     }

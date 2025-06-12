@@ -2,10 +2,12 @@ package com.kollege.referral.service.impl;
 
 import com.kollege.referral.dto.ReferralAnalyticsResponse;
 import com.kollege.referral.dto.ProfitReportResponse;
+import com.kollege.referral.dto.EarningNotificationDTO;
 import com.kollege.referral.service.AnalyticsService;
 import com.kollege.referral.repository.UserRepository;
 import com.kollege.referral.repository.EarningRepository;
 import com.kollege.referral.repository.TransactionRepository;
+import com.kollege.referral.controller.EarningNotificationController;
 import com.kollege.referral.model.User;
 import com.kollege.referral.model.Earning;
 import com.kollege.referral.model.Transaction;
@@ -18,6 +20,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +33,25 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         private final UserRepository userRepository;
         private final EarningRepository earningRepository;
         private final TransactionRepository transactionRepository;
+        private final EarningNotificationController earningNotificationController;
+
+        @Async
+        @EventListener
+        public void handleEarningCreated(Earning earning) {
+                User parentUser = earning.getParentUser();
+                User sourceUser = earning.getSourceUser();
+
+                EarningNotificationDTO notification = EarningNotificationDTO.builder()
+                                .userId(parentUser.getId())
+                                .userName(parentUser.getName())
+                                .earnedAmount(earning.getEarnedAmount())
+                                .level(earning.getLevel())
+                                .timestamp(earning.getTimestamp())
+                                .referralName(sourceUser != null ? sourceUser.getName() : "System")
+                                .build();
+
+                earningNotificationController.notifyEarning(notification);
+        }
 
         @Override
         public ReferralAnalyticsResponse getReferralAnalytics(LocalDate startDate, LocalDate endDate) {
@@ -215,16 +240,18 @@ public class AnalyticsServiceImpl implements AnalyticsService {
         }
 
         @Override
-        public byte[] exportAnalytics(LocalDate startDate, LocalDate endDate) {
+        public byte[] exportReferralAnalytics(LocalDate startDate, LocalDate endDate) {
                 LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(1);
                 LocalDateTime end = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
                 StringBuilder csv = new StringBuilder();
-                csv.append("Date,Total Referrals,Active Referrers,Conversions,Revenue,Payouts,Profit\n");
-
-                LocalDate currentDate = start.toLocalDate();
                 DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+                // Headers
+                csv.append("Date,Total Referrals,Active Referrers,Conversion Rate,Total Earnings,Average Earnings Per Referral\n");
+
+                // Daily data
+                LocalDate currentDate = start.toLocalDate();
                 while (!currentDate.isAfter(end.toLocalDate())) {
                         LocalDateTime dayStart = currentDate.atStartOfDay();
                         LocalDateTime dayEnd = currentDate.atTime(23, 59, 59);
@@ -241,30 +268,144 @@ public class AnalyticsServiceImpl implements AnalyticsService {
                                                         && user.getLastActive().isBefore(dayEnd))
                                         .count();
 
+                        double conversionRate = dailyReferrals > 0 ? (activeReferrers / (double) dailyReferrals) * 100
+                                        : 0;
+
+                        List<Earning> dailyEarnings = earningRepository.findByTimestampBetween(dayStart, dayEnd, null)
+                                        .getContent();
+                        double totalEarnings = dailyEarnings.stream().mapToDouble(Earning::getEarnedAmount).sum();
+                        double avgEarningsPerReferral = dailyReferrals > 0 ? totalEarnings / dailyReferrals : 0;
+
+                        // Add row to CSV
+                        csv.append(String.format("%s,%d,%d,%.2f,%.2f,%.2f\n",
+                                        currentDate.format(dateFormatter),
+                                        dailyReferrals,
+                                        activeReferrers,
+                                        conversionRate,
+                                        totalEarnings,
+                                        avgEarningsPerReferral));
+
+                        currentDate = currentDate.plusDays(1);
+                }
+
+                // Top performers section
+                csv.append("\nTop Performers\n");
+                csv.append("User ID,Name,Total Referrals,Total Earnings,Conversion Rate\n");
+
+                List<User> topPerformers = userRepository.findAll().stream()
+                                .filter(user -> !user.getDirectReferrals().isEmpty())
+                                .sorted((a, b) -> Double.compare(b.getTotalEarnings(), a.getTotalEarnings()))
+                                .limit(5)
+                                .collect(Collectors.toList());
+
+                for (User user : topPerformers) {
+                        long userReferrals = user.getDirectReferrals().size();
+                        double userConversionRate = (userReferrals / (double) userRepository.count()) * 100;
+
+                        csv.append(String.format("%d,%s,%d,%.2f,%.2f\n",
+                                        user.getId(),
+                                        user.getName(),
+                                        userReferrals,
+                                        user.getTotalEarnings(),
+                                        userConversionRate));
+                }
+
+                return csv.toString().getBytes();
+        }
+
+        @Override
+        public byte[] exportProfitReport(LocalDate startDate, LocalDate endDate) {
+                LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(1);
+                LocalDateTime end = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
+
+                StringBuilder csv = new StringBuilder();
+                DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+                // Headers
+                csv.append("Date,Revenue,Direct Payouts,Indirect Payouts,Processing Fees,Marketing Costs,Net Profit,Profit Margin\n");
+
+                // Daily data
+                LocalDate currentDate = start.toLocalDate();
+                while (!currentDate.isAfter(end.toLocalDate())) {
+                        LocalDateTime dayStart = currentDate.atStartOfDay();
+                        LocalDateTime dayEnd = currentDate.atTime(23, 59, 59);
+
+                        // Get daily transactions
                         List<Transaction> dailyTransactions = transactionRepository.findAll().stream()
                                         .filter(t -> t.getTimestamp().isAfter(dayStart)
                                                         && t.getTimestamp().isBefore(dayEnd))
                                         .collect(Collectors.toList());
                         double dailyRevenue = dailyTransactions.stream().mapToDouble(Transaction::getAmount).sum();
 
+                        // Get daily earnings
                         List<Earning> dailyEarnings = earningRepository.findByTimestampBetween(dayStart, dayEnd, null)
                                         .getContent();
-                        double dailyPayouts = dailyEarnings.stream().mapToDouble(Earning::getEarnedAmount).sum();
+                        double directPayouts = dailyEarnings.stream()
+                                        .filter(e -> e.getLevel() == 1)
+                                        .mapToDouble(Earning::getEarnedAmount)
+                                        .sum();
+                        double indirectPayouts = dailyEarnings.stream()
+                                        .filter(e -> e.getLevel() == 2)
+                                        .mapToDouble(Earning::getEarnedAmount)
+                                        .sum();
 
-                        double dailyProfit = dailyRevenue - dailyPayouts - (dailyRevenue * 0.06); // 6% for fees and
-                                                                                                  // marketing
+                        // Calculate fees and costs
+                        double processingFees = dailyRevenue * 0.01; // 1% processing fee
+                        double marketingCosts = dailyRevenue * 0.05; // 5% marketing costs
+                        double netProfit = dailyRevenue - directPayouts - indirectPayouts - processingFees
+                                        - marketingCosts;
+                        double profitMargin = dailyRevenue > 0 ? (netProfit / dailyRevenue) * 100 : 0;
 
                         // Add row to CSV
-                        csv.append(String.format("%s,%d,%d,%d,%.2f,%.2f,%.2f\n",
+                        csv.append(String.format("%s,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
                                         currentDate.format(dateFormatter),
-                                        dailyReferrals,
-                                        activeReferrers,
-                                        (int) (dailyReferrals * 0.35), // Assume 35% conversion rate
                                         dailyRevenue,
-                                        dailyPayouts,
-                                        dailyProfit));
+                                        directPayouts,
+                                        indirectPayouts,
+                                        processingFees,
+                                        marketingCosts,
+                                        netProfit,
+                                        profitMargin));
 
                         currentDate = currentDate.plusDays(1);
+                }
+
+                // Monthly summary section
+                csv.append("\nMonthly Summary\n");
+                csv.append("Month,Total Revenue,Total Payouts,Total Costs,Net Profit,Average Profit Margin\n");
+
+                // Group by month and calculate totals
+                Map<String, List<String[]>> monthlyData = new TreeMap<>();
+                for (String line : csv.toString().split("\n")) {
+                        if (line.matches("\\d{4}-\\d{2}-\\d{2},.*")) {
+                                String[] parts = line.split(",");
+                                String month = parts[0].substring(0, 7); // YYYY-MM
+                                monthlyData.computeIfAbsent(month, k -> new ArrayList<>()).add(parts);
+                        }
+                }
+
+                for (Map.Entry<String, List<String[]>> entry : monthlyData.entrySet()) {
+                        String month = entry.getKey();
+                        List<String[]> rows = entry.getValue();
+
+                        double monthlyRevenue = rows.stream().mapToDouble(row -> Double.parseDouble(row[1])).sum();
+                        double monthlyPayouts = rows.stream()
+                                        .mapToDouble(row -> Double.parseDouble(row[2]) + Double.parseDouble(row[3]))
+                                        .sum();
+                        double monthlyCosts = rows.stream()
+                                        .mapToDouble(row -> Double.parseDouble(row[4]) + Double.parseDouble(row[5]))
+                                        .sum();
+                        double monthlyProfit = monthlyRevenue - monthlyPayouts - monthlyCosts;
+                        double avgProfitMargin = rows.stream().mapToDouble(row -> Double.parseDouble(row[7])).average()
+                                        .orElse(0);
+
+                        csv.append(String.format("%s,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+                                        month,
+                                        monthlyRevenue,
+                                        monthlyPayouts,
+                                        monthlyCosts,
+                                        monthlyProfit,
+                                        avgProfitMargin));
                 }
 
                 return csv.toString().getBytes();
