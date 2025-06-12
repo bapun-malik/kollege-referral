@@ -4,6 +4,9 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,14 +17,22 @@ public class OpenApiConfig {
         public OpenAPI referralSystemOpenAPI() {
                 return new OpenAPI()
                                 .info(new Info()
-                                                .title("Referral System API")
-                                                .description("Multi-Level Referral & Earning System REST API documentation")
-                                                .version("1.0")
+                                                .title("Kollege Referral System API")
+                                                .description("API documentation for the multi-level referral and earning system")
+                                                .version("1.0.0")
                                                 .contact(new Contact()
-                                                                .name("Kollege")
-                                                                .email("support@kollege.com"))
+                                                                .name("Kollege Support")
+                                                                .email("support@kollege.com")
+                                                                .url("https://kollege.com/support"))
                                                 .license(new License()
-                                                                .name("Apache 2.0")
-                                                                .url("http://www.apache.org/licenses/LICENSE-2.0.html")));
+                                                                .name("MIT License")
+                                                                .url("https://opensource.org/licenses/MIT")))
+                                .components(new Components()
+                                                .addSecuritySchemes("bearer-jwt", new SecurityScheme()
+                                                                .type(SecurityScheme.Type.HTTP)
+                                                                .scheme("bearer")
+                                                                .bearerFormat("JWT")
+                                                                .description("JWT token authentication")))
+                                .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"));
         }
 }

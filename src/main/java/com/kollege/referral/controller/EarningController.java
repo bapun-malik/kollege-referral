@@ -1,151 +1,114 @@
 package com.kollege.referral.controller;
 
-import com.kollege.referral.model.Earning;
-import com.kollege.referral.repository.EarningRepository;
+import com.kollege.referral.dto.EarningResponse;
+import com.kollege.referral.dto.EarningsSummaryResponse;
+import com.kollege.referral.service.EarningService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.hateoas.CollectionModel;
-import org.springframework.hateoas.EntityModel;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 
 @RestController
-@RequestMapping("/api/earnings")
+@RequestMapping("/api/v1/earnings")
 @RequiredArgsConstructor
-@Tag(name = "Earnings Management", description = "APIs for managing and retrieving referral earnings. Provides endpoints for querying earnings by user, level, and date ranges.")
+@Tag(name = "Earnings Management", description = "APIs for managing and retrieving earning information")
 public class EarningController {
-        private final EarningRepository earningRepository;
-        private final SimpMessagingTemplate messagingTemplate;
 
-        @Operation(summary = "Get user earnings", description = "Retrieves all earnings for a user, optionally filtered by date range. Returns both direct (level 1) and indirect (level 2) earnings.")
-        @GetMapping("/user/{userId}")
-        public ResponseEntity<CollectionModel<EntityModel<Earning>>> getUserEarnings(
-                        @Parameter(description = "ID of the user to fetch earnings for", example = "1") @PathVariable Long userId,
-                        @Parameter(description = "Start date for filtering (ISO format)", example = "2024-01-01T00:00:00") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-                        @Parameter(description = "End date for filtering (ISO format)", example = "2024-12-31T23:59:59") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        private final EarningService earningService;
 
-                List<Earning> earnings;
-                if (startDate != null && endDate != null) {
-                        earnings = earningRepository.findByParentUserIdAndDateRange(userId, startDate, endDate);
-                } else {
-                        earnings = earningRepository.findByParentUserIdOrderByTimestampDesc(userId);
-                }
-
-                List<EntityModel<Earning>> earningModels = earnings.stream()
-                                .map(earning -> EntityModel.of(earning,
-                                                linkTo(methodOn(EarningController.class).getUserEarnings(userId, null,
-                                                                null)).withSelfRel(),
-                                                linkTo(methodOn(EarningController.class).getEarningsByLevel(userId))
-                                                                .withRel("by-level")))
-                                .collect(Collectors.toList());
-
-                return ResponseEntity.ok(
-                                CollectionModel.of(earningModels,
-                                                linkTo(methodOn(EarningController.class).getUserEarnings(userId, null,
-                                                                null)).withSelfRel()));
+        @Operation(summary = "Get user's earnings summary", description = "Retrieve a summary of user's earnings including total, direct, and indirect earnings", responses = {
+                        @ApiResponse(responseCode = "200", description = "Earnings summary retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EarningsSummaryResponse.class), examples = @ExampleObject(value = """
+                                        {
+                                            "totalEarnings": 1250.00,
+                                            "directReferralEarnings": 1000.00,
+                                            "indirectReferralEarnings": 250.00,
+                                            "pendingPayouts": 100.00,
+                                            "monthlyStats": {
+                                                "currentMonth": 450.00,
+                                                "previousMonth": 800.00,
+                                                "monthlyGrowth": -43.75
+                                            }
+                                        }
+                                        """))),
+                        @ApiResponse(responseCode = "404", description = "User not found", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = """
+                                        {
+                                            "error": "User not found",
+                                            "message": "No user found with ID 1"
+                                        }
+                                        """)))
+        })
+        @GetMapping("/{userId}/summary")
+        public ResponseEntity<EarningsSummaryResponse> getEarningsSummary(
+                        @Parameter(description = "ID of the user", example = "1") @PathVariable Long userId) {
+                return ResponseEntity.ok(earningService.getEarningsSummary(userId));
         }
 
-        @Operation(summary = "Get earnings by level", description = "Retrieves the total earnings grouped by referral level. Level 1 represents direct referrals (5% commission), and Level 2 represents indirect referrals (1% commission).")
-        @GetMapping("/user/{userId}/by-level")
-        public ResponseEntity<Map<String, Double>> getEarningsByLevel(
-                        @Parameter(description = "ID of the user to fetch earnings for", example = "1") @PathVariable Long userId) {
-                Double level1Earnings = earningRepository.sumEarningsByUserIdAndLevel(userId, 1);
-                Double level2Earnings = earningRepository.sumEarningsByUserIdAndLevel(userId, 2);
-
-                return ResponseEntity.ok(Map.of(
-                                "level1", level1Earnings != null ? level1Earnings : 0.0,
-                                "level2", level2Earnings != null ? level2Earnings : 0.0));
+        @Operation(summary = "Get detailed earnings history", description = "Retrieve detailed earnings history with optional date range filter", responses = {
+                        @ApiResponse(responseCode = "200", description = "Earnings history retrieved successfully", content = @Content(mediaType = "application/json", schema = @Schema(implementation = EarningResponse.class), examples = @ExampleObject(value = """
+                                        {
+                                            "earnings": [
+                                                {
+                                                    "id": 1,
+                                                    "amount": 100.00,
+                                                    "referralLevel": 1,
+                                                    "timestamp": "2024-03-15T10:30:00Z",
+                                                    "referredUser": {
+                                                        "id": 2,
+                                                        "name": "Jane Smith",
+                                                        "purchaseAmount": 1000.00
+                                                    }
+                                                },
+                                                {
+                                                    "id": 2,
+                                                    "amount": 50.00,
+                                                    "referralLevel": 2,
+                                                    "timestamp": "2024-03-16T14:20:00Z",
+                                                    "referredUser": {
+                                                        "id": 3,
+                                                        "name": "Bob Wilson",
+                                                        "purchaseAmount": 1000.00
+                                                    }
+                                                }
+                                            ],
+                                            "totalCount": 2,
+                                            "totalAmount": 150.00
+                                        }
+                                        """)))
+        })
+        @GetMapping("/{userId}/history")
+        public ResponseEntity<List<EarningResponse>> getEarningsHistory(
+                        @Parameter(description = "ID of the user", example = "1") @PathVariable Long userId,
+                        @Parameter(description = "Start date (inclusive)", example = "2024-03-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+                        @Parameter(description = "End date (inclusive)", example = "2024-03-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+                return ResponseEntity.ok(earningService.getEarningsHistory(userId, startDate, endDate));
         }
 
-        @Operation(summary = "Get earnings by specific level", description = "Retrieves all earnings for a specific referral level. Use level 1 for direct referral earnings (5%) or level 2 for indirect referral earnings (1%).")
-        @GetMapping("/user/{userId}/level/{level}")
-        public ResponseEntity<CollectionModel<EntityModel<Earning>>> getEarningsByUserAndLevel(
-                        @Parameter(description = "ID of the user to fetch earnings for", example = "1") @PathVariable Long userId,
-                        @Parameter(description = "Referral level (1 for direct 5%, 2 for indirect 1%)", example = "1") @PathVariable int level) {
-
-                List<EntityModel<Earning>> earningModels = earningRepository.findByParentUserIdAndLevel(userId, level)
-                                .stream()
-                                .map(earning -> EntityModel.of(earning,
-                                                linkTo(methodOn(EarningController.class).getUserEarnings(userId, null,
-                                                                null)).withSelfRel()))
-                                .collect(Collectors.toList());
-
-                return ResponseEntity.ok(
-                                CollectionModel.of(earningModels,
-                                                linkTo(methodOn(EarningController.class)
-                                                                .getEarningsByUserAndLevel(userId, level))
-                                                                .withSelfRel(),
-                                                linkTo(methodOn(EarningController.class).getEarningsByLevel(userId))
-                                                                .withRel("summary")));
-        }
-
-        @Operation(summary = "Get earnings trend", description = "Retrieves the earnings trend over time for a specific user. Groups earnings by date and returns daily totals.")
-        @GetMapping("/trend/{userId}")
-        public Map<String, Double> getEarningsTrend(
-                        @Parameter(description = "ID of the user to fetch trend for", example = "1") @PathVariable Long userId,
-                        @Parameter(description = "Timeframe for trend analysis (daily, weekly, monthly)", example = "daily") @RequestParam String timeframe,
-                        @Parameter(description = "Start date for trend analysis (ISO format)", example = "2024-01-01T00:00:00") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-                        @Parameter(description = "End date for trend analysis (ISO format)", example = "2024-12-31T23:59:59") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-
-                List<Earning> earnings = earningRepository.findByParentUserIdAndDateRange(userId, startDate, endDate);
-
-                return earnings.stream()
-                                .collect(Collectors.groupingBy(
-                                                earning -> earning.getTimestamp().toLocalDate().toString(),
-                                                Collectors.collectingAndThen(
-                                                                Collectors.toList(),
-                                                                list -> list.stream()
-                                                                                .mapToDouble(Earning::getEarnedAmount)
-                                                                                .sum())));
-        }
-
-        @Operation(summary = "Get earnings distribution", description = "Analyzes the distribution of earnings between direct and indirect referrals for a specific time period.")
-        @GetMapping("/distribution/{userId}")
-        public Map<String, Double> getEarningsDistribution(
-                        @Parameter(description = "ID of the user to analyze", example = "1") @PathVariable Long userId,
-                        @Parameter(description = "Start date for analysis (ISO format)", example = "2024-01-01T00:00:00") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-                        @Parameter(description = "End date for analysis (ISO format)", example = "2024-12-31T23:59:59") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-
-                List<Earning> earnings = earningRepository.findByParentUserIdAndDateRange(userId, startDate, endDate);
-
-                return earnings.stream()
-                                .collect(Collectors.groupingBy(
-                                                earning -> earning.getLevel() == 1 ? "Direct" : "Indirect",
-                                                Collectors.collectingAndThen(
-                                                                Collectors.toList(),
-                                                                list -> list.stream()
-                                                                                .mapToDouble(Earning::getEarnedAmount)
-                                                                                .sum())));
-        }
-
-        @Operation(summary = "Get earnings per referral", description = "Breaks down earnings by individual referrals, showing how much each referred user has contributed to the total earnings.")
-        @GetMapping("/per-referral/{userId}")
-        public Map<Long, Double> getEarningsPerReferral(
-                        @Parameter(description = "ID of the user to analyze", example = "1") @PathVariable Long userId,
-                        @Parameter(description = "Start date for analysis (ISO format)", example = "2024-01-01T00:00:00") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-                        @Parameter(description = "End date for analysis (ISO format)", example = "2024-12-31T23:59:59") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
-
-                List<Earning> earnings = earningRepository.findByParentUserIdAndDateRange(userId, startDate, endDate);
-
-                return earnings.stream()
-                                .collect(Collectors.groupingBy(
-                                                earning -> earning.getSourceUser().getId(),
-                                                Collectors.collectingAndThen(
-                                                                Collectors.toList(),
-                                                                list -> list.stream()
-                                                                                .mapToDouble(Earning::getEarnedAmount)
-                                                                                .sum())));
+        @Operation(summary = "Export earnings report", description = "Export earnings data in CSV format with optional date range filter", responses = {
+                        @ApiResponse(responseCode = "200", description = "CSV file generated successfully", content = @Content(mediaType = "text/csv", examples = @ExampleObject(value = """
+                                        Date,Amount,Level,Referred User,Purchase Amount
+                                        2024-03-15 10:30:00,100.00,1,Jane Smith,1000.00
+                                        2024-03-16 14:20:00,50.00,2,Bob Wilson,1000.00
+                                        """)))
+        })
+        @GetMapping("/{userId}/export")
+        public ResponseEntity<byte[]> exportEarnings(
+                        @Parameter(description = "ID of the user", example = "1") @PathVariable Long userId,
+                        @Parameter(description = "Start date (inclusive)", example = "2024-03-01") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+                        @Parameter(description = "End date (inclusive)", example = "2024-03-31") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+                byte[] csvData = earningService.exportEarnings(userId, startDate, endDate);
+                return ResponseEntity.ok()
+                                .header("Content-Type", "text/csv")
+                                .header("Content-Disposition", "attachment; filename=earnings_report.csv")
+                                .body(csvData);
         }
 }
